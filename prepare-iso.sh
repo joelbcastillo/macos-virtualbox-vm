@@ -49,19 +49,19 @@ function createISO()
     fi
 
     echo
-    echo Create ${isoName} blank ISO image with a Single Partition - Apple Partition Map
+    echo Create "${isoName}" blank ISO image with a Single Partition - Apple Partition Map
     echo --------------------------------------------------------------------------
-    echo $ hdiutil create -o /tmp/${isoName} -size 8g -layout SPUD -fs HFS+J -type SPARSE
-    hdiutil create -o /tmp/${isoName} -size 8g -layout SPUD -fs HFS+J -type SPARSE
+    echo $ hdiutil create -o "/tmp/${isoName}" -size 8g -layout SPUD -fs HFS+J -type SPARSE
+    hdiutil create -o "/tmp/${isoName}" -size 8g -layout SPUD -fs HFS+J -type SPARSE
 
     echo
     echo Mount the sparse bundle for package addition
     echo --------------------------------------------------------------------------
-    echo $ hdiutil attach /tmp/${isoName}.sparseimage -noverify -nobrowse -mountpoint /Volumes/install_build
-    hdiutil attach /tmp/${isoName}.sparseimage -noverify -nobrowse -mountpoint /Volumes/install_build
+    echo $ hdiutil attach "/tmp/${isoName}.sparseimage" -noverify -nobrowse -mountpoint /Volumes/install_build
+    hdiutil attach "/tmp/${isoName}.sparseimage" -noverify -nobrowse -mountpoint /Volumes/install_build
 
     echo
-    echo Restore the Base System into the ${isoName} ISO image
+    echo Restore the Base System into the "${isoName}" ISO image
     echo --------------------------------------------------------------------------
     if [ "${isoName}" == "HighSierra" ] || [ "${isoName}" == "Mojave" ] ; then
       echo $ asr restore -source "${installerAppName}"/Contents/SharedSupport/BaseSystem.dmg -target /Volumes/install_build -noprompt -noverify -erase
@@ -85,7 +85,7 @@ function createISO()
     fi
 
     echo
-    echo Copy macOS ${isoName} installer dependencies
+    echo Copy macOS "${isoName}" installer dependencies
     echo --------------------------------------------------------------------------
     if [ "${isoName}" == "HighSierra" ] || [ "${isoName}" == "Mojave" ] ; then
       echo $ ditto -V "${installerAppName}"/Contents/SharedSupport/BaseSystem.chunklist /Volumes/OS\ X\ Base\ System/BaseSystem.chunklist
@@ -111,29 +111,88 @@ function createISO()
     echo $ hdiutil detach /Volumes/OS\ X\ Base\ System/
     hdiutil detach /Volumes/OS\ X\ Base\ System/
 
+    local partitionSize
+    partitionSize="$(hdiutil resize -limits "/tmp/${isoName}.sparseimage" | tail -n 1 | awk '{ print $1 }')b"
     echo
     echo Resize the partition in the sparse bundle to remove any free space
     echo --------------------------------------------------------------------------
-    echo $ hdiutil resize -size `hdiutil resize -limits /tmp/${isoName}.sparseimage | tail -n 1 | awk '{ print $1 }'`b /tmp/${isoName}.sparseimage
-    hdiutil resize -size `hdiutil resize -limits /tmp/${isoName}.sparseimage | tail -n 1 | awk '{ print $1 }'`b /tmp/${isoName}.sparseimage
+    echo $ hdiutil resize -size "$partitionSize" "/tmp/${isoName}.sparseimage"
+    hdiutil resize -size "$partitionSize" "/tmp/${isoName}.sparseimage"
 
     echo
-    echo Convert the ${isoName} sparse bundle to ISO/CD master
+    echo Convert the "${isoName}" sparse bundle to ISO/CD master
     echo --------------------------------------------------------------------------
-    echo $ hdiutil convert /tmp/${isoName}.sparseimage -format UDTO -o /tmp/${isoName}
-    hdiutil convert /tmp/${isoName}.sparseimage -format UDTO -o /tmp/${isoName}
+    echo $ hdiutil convert "/tmp/${isoName}.sparseimage" -format UDTO -o "/tmp/${isoName}"
+    hdiutil convert "/tmp/${isoName}.sparseimage" -format UDTO -o "/tmp/${isoName}"
 
     echo
     echo Remove the sparse bundle
     echo --------------------------------------------------------------------------
-    echo $ rm /tmp/${isoName}.sparseimage
-    rm /tmp/${isoName}.sparseimage
+    echo $ rm "/tmp/${isoName}.sparseimage"
+    rm "/tmp/${isoName}.sparseimage"
 
     echo
     echo Rename the ISO and move it to the desktop
     echo --------------------------------------------------------------------------
-    echo $ mv /tmp/${isoName}.cdr ~/Desktop/${isoName}.iso
-    mv /tmp/${isoName}.cdr ~/Desktop/${isoName}.iso
+    echo $ mv "/tmp/${isoName}.cdr" "$HOME/Desktop/${isoName}.iso"
+    mv "/tmp/${isoName}.cdr" "$HOME/Desktop/${isoName}.iso"
+  fi
+}
+
+#
+# createISOCatalina
+#
+# This function creates the ISO image for the user.
+# Inputs:  $1 = The name of the installer - located in your Applications folder or in your local folder/PATH.
+#          $2 = The Name of the ISO you want created.
+function createISOCatalina()
+{
+  if [ $# -eq 2 ] ; then
+    local installerAppName=${1}
+    local isoName=${2}
+    local installerMedia="Install macOS ${isoName}"
+    local error=0
+
+    # echo Debug: installerAppName = "${installerAppName}" , isoName = "${isoName}" , installerMedia = "${installerMedia}"
+
+    echo
+    echo Create "${isoName}" DMG Disk Image
+    echo --------------------------------------------------------------------------
+    echo $ hdiutil create -o "/tmp/${isoName}.dmg" -size 8500m -volname "${isoName}" -layout SPUD -fs HFS+J
+    hdiutil create -o "/tmp/${isoName}.dmg" -size 8500m -volname "${isoName}" -layout SPUD -fs HFS+J
+
+    echo
+    echo Mount "${isoName}" DMG Disk Image
+    echo --------------------------------------------------------------------------
+    echo $ hdiutil attach "/tmp/${isoName}.dmg" -noverify -mountpoint "/Volumes/${isoName}"
+    hdiutil attach "/tmp/${isoName}.dmg" -noverify -mountpoint "/Volumes/${isoName}"
+
+    echo
+    echo Create "${isoName}" Installer
+    echo -----------------------------------------------------------
+    echo $ sudo "/Applications/${installerAppName}/Contents/Resources/createinstallmedia" --volume "/Volumes/${isoName}" --nointeraction
+    sudo "/Applications/${installerAppName}/Contents/Resources/createinstallmedia" --volume "/Volumes/${isoName}" --nointeraction
+
+    echo
+    echo Unmount "${isoName}" Installer
+    echo $ hdiutil detach "/Volumes/${installerMedia}"
+    hdiutil detach "/Volumes/${installerMedia}"
+
+    echo
+    echo Convert "${isoName}" DMG to ISO
+    echo $ hdiutil convert "/tmp/${isoName}.dmg" -format UDTO -o "/tmp/${isoName}.cdr"
+    hdiutil convert "/tmp/${isoName}.dmg" -format UDTO -o "/tmp/${isoName}.cdr"
+
+    echo
+    echo Rename the ISO and move it to the desktop
+    echo --------------------------------------------------------------------------
+    echo $ mv "/tmp/${isoName}.cdr" "$HOME/Desktop/${isoName}.iso"
+    mv "/tmp/${isoName}.cdr" "$HOME/Desktop/${isoName}.iso"
+
+    echo
+    echo Remove "${isoName}.dmg"
+    echo $ rm -f "/tmp/${isoName}.dmg"
+    rm -f "/tmp/${isoName}.dmg"
   fi
 }
 
@@ -159,7 +218,7 @@ function installerExists()
 #
 # Eject installer disk in case it was opened after download from App Store
 for disk in $(hdiutil info | grep /dev/disk | grep partition | cut -f 1); do
-  hdiutil detach -force ${disk}
+  hdiutil detach -force "${disk}"
 done
 
 # See if we can find an eligible installer.
@@ -180,7 +239,11 @@ else
         if installerExists "Install OS X Yosemite.app" ; then
           createISO "Install OS X Yosemite.app" "Yosemite"
         else
-          echo "Could not find installer for Yosemite (10.10), El Capitan (10.11), Sierra (10.12), High Sierra (10.13) or Mojave (10.14)."
+          if installerExists "Install macOS Catalina.app" ; then
+            createISOCatalina "Install macOS Catalina.app" "Catalina"
+          else
+            echo "Could not find installer for Yosemite (10.10), El Capitan (10.11), Sierra (10.12), High Sierra (10.13), Mojave (10.14) or Catalina (10.15)"
+          fi
         fi
       fi
     fi
